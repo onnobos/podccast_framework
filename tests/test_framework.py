@@ -522,6 +522,33 @@ class TestShowMemoryManager(unittest.TestCase):
         ctx_truncated = get_relevant_memory_context(plugin=self.plugin, max_chars=10)
         self.assertEqual(len(ctx_truncated), 10)
 
+    def test_rebuild_all_show_memory_with_mock(self):
+        from src.memory_manager import rebuild_all_show_memory
+        class DummyMsg:
+            content = json.dumps({
+                "title": "Mock Rebuild Episode",
+                "featured_expert": "Coach Test",
+                "core_lessons": ["Lesson 1"],
+                "standout_quotes": ["Quote 1"],
+                "keywords": ["tag1"]
+            })
+        class DummyChoice:
+            message = DummyMsg()
+        class DummyResp:
+            choices = [DummyChoice()]
+            usage = None
+        class DummyCompletions:
+            def create(self, **kwargs):
+                return DummyResp()
+        class DummyChat:
+            completions = DummyCompletions()
+        class DummyClient:
+            chat = DummyChat()
+
+        mem_path = rebuild_all_show_memory(plugin=self.plugin, client=DummyClient())
+        self.assertEqual(mem_path, self.memory_file)
+        self.assertTrue(self.memory_file.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

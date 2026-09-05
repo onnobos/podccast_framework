@@ -17,7 +17,7 @@ from src.audio_engine import generate_podcast_audio
 from src.rss_publisher import publish_episode, delete_episode_from_r2
 from src.cost_tracker import cost_tracker
 from src.framework import registry, get_active_plugin
-from src.memory_manager import update_podcast_memory
+from src.memory_manager import update_podcast_memory, rebuild_all_show_memory
 
 app = typer.Typer(help="Podcast Pipeline CLI (Framework & Plugins)", no_args_is_help=False)
 console = Console()
@@ -258,9 +258,10 @@ def list_plugins_cmd():
 
 @app.command(name="memory")
 def memory_cmd(
-    action: str = typer.Argument("show", help="Action: 'show' (display memory) or 'update' (extract/update memory)"),
-    slug: Optional[str] = typer.Option(None, "--slug", "-s", help="Episode slug to update (required if action='update')"),
-    plugin: str = typer.Option("volleyball", "--plugin", help="Podcast show plugin to use")
+    action: str = typer.Argument("show", help="Action: 'show' (display memory), 'update' (single episode), or 'rebuild' (rebuild all memory)"),
+    slug: Optional[str] = typer.Option(None, "--slug", "-s", help="Episode slug to update"),
+    plugin: str = typer.Option("volleyball", "--plugin", help="Podcast show plugin to use"),
+    fresh: bool = typer.Option(False, "--fresh", "-f", help="Fresh rebuild: reset memory file before re-extracting")
 ):
     """Manage show institutional memory (MEMORY.md) across episodes."""
     plugin_obj = registry.get_plugin(plugin) or registry.active_plugin
@@ -281,8 +282,19 @@ def memory_cmd(
         script_file = Path(f"output/scripts/{slug}_script.md")
         update_podcast_memory(master_file, script_path=script_file if script_file.exists() else None, plugin=plugin_obj)
         console.print(f"[bold green]Successfully updated memory for '{slug}' in {plugin_obj.memory_path}[/bold green]")
+    elif action.lower() == "rebuild":
+        if slug:
+            master_file = Path(f"output/master_{slug}.md")
+            if not master_file.exists():
+                console.print(f"[bold red]Master content not found for slug '{slug}' at {master_file}.[/bold red]")
+                sys.exit(1)
+            script_file = Path(f"output/scripts/{slug}_script.md")
+            update_podcast_memory(master_file, script_path=script_file if script_file.exists() else None, plugin=plugin_obj)
+            console.print(f"[bold green]Rebuilt memory for '{slug}' in {plugin_obj.memory_path}[/bold green]")
+        else:
+            rebuild_all_show_memory(plugin=plugin_obj, fresh=fresh)
     else:
-        console.print(f"[bold red]Unknown action '{action}'. Use 'show' or 'update'.[/bold red]")
+        console.print(f"[bold red]Unknown action '{action}'. Use 'show', 'update', or 'rebuild'.[/bold red]")
 
 
 @app.command()
@@ -677,15 +689,16 @@ def interactive_main_menu():
         console.print("[bold yellow]What would you like to do?[/bold yellow]\n")
         console.print(f"  [bold green][1] Generate New Episode from URL[/bold green] (Using [cyan]{active_plugin.name}[/cyan] pipeline)")
         console.print("  [bold cyan][2] Rebuild / Reproduce an Episode[/bold cyan] (Full rebuild, script+audio, or audio-only)")
-        console.print("  [bold white][3] List Generated Episodes[/bold white] (View scraped, master content, script & audio status)")
-        console.print("  [bold magenta][4] Synchronize R2 RSS Feed[/bold magenta] (Clean feed.xml so it strictly matches local episodes)")
-        console.print("  [bold red][5] Delete / Purge an Episode[/bold red] (Delete local episode files and/or Cloudflare R2 bucket items)")
-        console.print(f"  [bold blue][6] Switch Podcast Show Plugin[/bold blue] (Installed: {len(all_plugins)})")
-        console.print("  [dim][7] Exit[/dim]")
+        console.print(f"  [bold yellow][3] Rebuild Show Memory (MEMORY.md)[/bold yellow] (Extract lessons & quotes for [cyan]{active_plugin.name}[/cyan])")
+        console.print("  [bold white][4] List Generated Episodes[/bold white] (View scraped, master content, script & audio status)")
+        console.print("  [bold magenta][5] Synchronize R2 RSS Feed[/bold magenta] (Clean feed.xml so it strictly matches local episodes)")
+        console.print("  [bold red][6] Delete / Purge an Episode[/bold red] (Delete local episode files and/or Cloudflare R2 bucket items)")
+        console.print(f"  [bold blue][7] Switch Podcast Show Plugin[/bold blue] (Installed: {len(all_plugins)})")
+        console.print("  [dim][8] Exit[/dim]")
         console.print("=" * 76)
 
-        choice = input("\nEnter choice [1-7] (or 'q' to quit): ").strip()
-        if choice in {"7", "q", "quit", "exit"}:
+        choice = input("\nEnter choice [1-8] (or 'q' to quit): ").strip()
+        if choice in {"8", "q", "quit", "exit"}:
             console.print("[dim]Goodbye![/dim]")
             sys.exit(0)
 
@@ -708,18 +721,68 @@ def interactive_main_menu():
             break
 
         elif choice == "3":
-            list_episodes()
+            console.print(f"\n[bold cyan]--- Rebuild Show Memory (MEMORY.md) [{active_plugin.name}] ---[/bold cyan]")
+            console.print("  [1] Rebuild memory for ALL episodes (incremental / update existing)")
+            console.print("  [2] Rebuild memory for ALL episodes (fresh start, wipe existing memory)")
+            console.print("  [3] Update memory for a SINGLE episode")
+            console.print("  [4] View current MEMORY.md")
+            console.print("  [5] Cancel / Return to main menu")
+
+            sub_choice = input("\nEnter choice [1-5]: ").strip()
+            if sub_choice == "1":
+                rebuild_all_show_memory(plugin=active_plugin, fresh=False)
+            elif sub_choice == "2":
+                confirm = input("Are you sure you want to reset MEMORY.md and re-extract all episodes? [y/N]: ").strip().lower()
+                if confirm in {"y", "yes"}:
+                    rebuild_all_show_memory(plugin=active_plugin, fresh=True)
+                else:
+                    console.print("[dim]Reset cancelled.[/dim]")
+            elif sub_choice == "3":
+                episodes = get_available_episodes()
+                valid_eps = [e for e in episodes if e["master"]]
+                if not valid_eps:
+                    console.print("[bold red]No episodes with master content found in output/ directory.[/bold red]")
+                else:
+                    console.print("\nEpisodes with master content:")
+                    for idx, ep in enumerate(valid_eps, start=1):
+                        console.print(f"  [{idx}] {ep['title']} ([cyan]{ep['slug']}[/cyan])")
+                    ep_pick = input("\nSelect episode number or slug: ").strip()
+                    target_ep = None
+                    for ep in valid_eps:
+                        if ep["slug"] == ep_pick:
+                            target_ep = ep
+                            break
+                    if not target_ep and ep_pick.isdigit():
+                        idx = int(ep_pick) - 1
+                        if 0 <= idx < len(valid_eps):
+                            target_ep = valid_eps[idx]
+                    if target_ep:
+                        mf = Path(f"output/master_{target_ep['slug']}.md")
+                        sf = Path(f"output/scripts/{target_ep['slug']}_script.md")
+                        update_podcast_memory(mf, script_path=sf if sf.exists() else None, plugin=active_plugin)
+                    else:
+                        console.print("[yellow]Invalid selection.[/yellow]")
+            elif sub_choice == "4":
+                mem = active_plugin.get_memory()
+                if not mem:
+                    console.print(f"[yellow]No memory found in {active_plugin.memory_path}[/yellow]")
+                else:
+                    console.print(Panel(mem, title=f"Show Memory — {active_plugin.name}", expand=False))
             input("\nPress [ENTER] to return to main menu...")
 
         elif choice == "4":
-            sync_feed()
+            list_episodes()
             input("\nPress [ENTER] to return to main menu...")
 
         elif choice == "5":
-            delete()
+            sync_feed()
             input("\nPress [ENTER] to return to main menu...")
 
         elif choice == "6":
+            delete()
+            input("\nPress [ENTER] to return to main menu...")
+
+        elif choice == "7":
             console.print("\n[bold cyan]--- Available Podcast Show Plugins ---[/bold cyan]")
             p_list = list(all_plugins.items())
             for idx, (p_slug, p_obj) in enumerate(p_list, start=1):
@@ -735,7 +798,7 @@ def interactive_main_menu():
             continue
 
         else:
-            console.print("[bold red]Invalid option. Please enter 1 to 7.[/bold red]")
+            console.print("[bold red]Invalid option. Please enter 1 to 8.[/bold red]")
 
 @app.command()
 def menu():

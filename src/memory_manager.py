@@ -228,3 +228,40 @@ def get_relevant_memory_context(plugin: Optional[Any] = None, max_chars: int = 4
     if len(memory) > max_chars:
         return memory[-max_chars:]
     return memory
+
+
+def rebuild_all_show_memory(plugin: Optional[Any] = None, fresh: bool = False, client: Optional[Any] = None) -> Path:
+    """
+    Scan all available output/master_*.md files and extract/rebuild MEMORY.md
+    for the given plugin. If fresh=True, starts from a clean MEMORY.md header.
+    """
+    if plugin is None:
+        from src.framework.registry import get_active_plugin
+        plugin = get_active_plugin()
+
+    master_files = sorted(Path("output").glob("master_*.md"))
+    master_files = [f for f in master_files if f.stem != "master_content"]
+
+    if not master_files:
+        console.print("[yellow]No master content files (output/master_*.md) found to rebuild memory from.[/yellow]")
+        return plugin.memory_path
+
+    if fresh:
+        show_name = getattr(plugin, "name", "Podcast")
+        header = (
+            f"# {show_name} — Show Knowledge & Episode Memory (MEMORY.md)\n\n"
+            "This document accumulates core coaching lessons, tactical mental models, and standout coach quotes across all produced episodes.\n"
+            "During scriptwriting and curation, hosts reference, compare, and quote these past insights whenever thematic similarities arise.\n\n"
+            "---\n\n"
+        )
+        plugin.save_memory(header)
+
+    console.print(f"[bold cyan]Rebuilding show memory for {len(master_files)} episode(s) [{plugin.name}]...[/bold cyan]")
+    for mf in master_files:
+        slug = mf.stem.replace("master_", "")
+        script_file = Path(f"output/scripts/{slug}_script.md")
+        script_path = script_file if script_file.exists() else None
+        update_podcast_memory(mf, script_path=script_path, plugin=plugin, client=client)
+
+    console.print(f"[bold green]Show memory rebuild complete: {plugin.memory_path}[/bold green]")
+    return plugin.memory_path
