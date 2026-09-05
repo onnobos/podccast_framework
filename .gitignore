@@ -1,0 +1,9 @@
+.env
+.auth/
+output/
+temp/
+scratch/
+__pycache__/
+*.pyc
+.DS_Store
+venv/

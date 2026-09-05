@@ -1,0 +1,23 @@
+# Web Scraping & Ingestion
+playwright>=1.45.0
+beautifulsoup4>=4.12.0
+
+# LLM, Transcription & AI
+openai>=1.30.0
+yt-dlp>=2024.5.27
+
+# Audio Processing & Normalization
+pydub>=0.25.1
+audioop-lts>=0.2.1
+
+# Cloud Storage & RSS Distribution
+boto3>=1.34.0
+certifi>=2024.0.0
+feedgen>=1.0.0
+
+# CLI, Configuration & Validation
+typer>=0.12.0
+rich>=13.7.0
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+python-dotenv>=1.0.1
