@@ -329,6 +329,16 @@ OK
 
 ---
 
+## 🤝 Community & Contributing
+
+We welcome contributions of all kinds! Please see our community guides:
+
+- **[Code of Conduct](CODE_OF_CONDUCT.md)**: Our standards for creating an open, welcoming community.
+- **[Contributing Guide](CONTRIBUTING.md)**: Setup instructions, architectural standards, and PR guidelines.
+- **[Security Policy](SECURITY.md)**: How to securely report vulnerabilities.
+
+---
+
 ## 📄 License & Attribution
 
 This project is licensed under the [MIT License](LICENSE).
