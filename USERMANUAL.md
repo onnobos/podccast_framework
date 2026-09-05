@@ -83,7 +83,7 @@ ffmpeg -version
 ### Step 2: Set Up Python Virtual Environment
 Open PowerShell, navigate to the repository directory, and initialize the virtual environment:
 ```powershell
-cd c:\projects\volleyball-podccast
+cd c:\projects\podcast_framework
 
 # Create virtual environment
 python -m venv venv
@@ -363,7 +363,7 @@ class MyCustomPlugin(PodcastPlugin):
         return MyCustomIngester()
 ```
 
-Consult [`plugins/README.md`](file:///c:/projects/volleyball-podccast/plugins/README.md) for full instructions.
+Consult [`plugins/README.md`](plugins/README.md) for full instructions.
 
 ---
 

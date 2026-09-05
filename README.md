@@ -55,7 +55,7 @@ Individual podcast shows are built as **plugins** on top of the framework, compl
 ## 📂 Project Directory Structure
 
 ```
-c:\projects\volleyball-podccast\
+podcast_framework/
 ├── src/
 │   ├── framework/                      # Framework Core
 │   │   ├── models.py                   # Data models (HostConfig, AudioTheme, ShowMetadata, etc.)
@@ -171,7 +171,7 @@ class TechPodcastPlugin(PodcastPlugin):
         }
 ```
 
-Consult [`plugins/README.md`](file:///c:/projects/volleyball-podccast/plugins/README.md) for full instructions and prompt customization.
+Consult [`plugins/README.md`](plugins/README.md) for full instructions and prompt customization.
 
 ---
 
@@ -202,9 +202,10 @@ winget install FFmpeg
 ```
 *Note: Restart PowerShell after installation so `ffmpeg` is available in system `PATH`.*
 
-### Step 2: Virtual Environment Setup
+### Step 2: Clone Repository & Virtual Environment Setup
 ```powershell
-cd c:\projects\volleyball-podccast
+git clone https://github.com/onnobos/podccast_framework.git
+cd podccast_framework
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
@@ -333,5 +334,5 @@ OK
 This project is licensed under the [MIT License](LICENSE).
 
 ### Attribution
-Anyone using, forking, or building upon this code should refer to and attribute credit to the original GitHub repository (`volleyball-podccast` / `volleybrains2podcast`).
+Anyone using, forking, or building upon this code should refer to and attribute credit to the repository [podccast_framework](https://github.com/onnobos/podccast_framework).
 
