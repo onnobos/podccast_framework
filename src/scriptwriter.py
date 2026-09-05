@@ -9,6 +9,7 @@ from rich.console import Console
 from src.config import settings
 from src.cost_tracker import cost_tracker
 from src.prompt_loader import load_prompt
+from src.memory_manager import get_relevant_memory_context
 
 console = Console()
 
@@ -237,6 +238,15 @@ def curate_masterclass_storylines(
         "Analyze all text and [CLIP_REF: ...] tags above. Select the 4 most inspiring, tactical, and high-retention storylines. Output ONLY valid JSON."
     )
 
+    memory_context = get_relevant_memory_context(plugin=plugin, max_chars=3000)
+    if memory_context:
+        user_prompt += (
+            f"\n\n--- PAST SHOW WISDOM & EPISODE MEMORY (MEMORY.MD) ---\n"
+            f"{memory_context}\n"
+            f"--- END SHOW MEMORY ---\n"
+            f"Use this past memory when selecting storylines to connect with prior themes, highlight contrasts, or reinforce proven coaching principles."
+        )
+
     for current_model in models_to_try:
         console.print(f"[bold cyan]Curating 4 Masterclass Storylines with Elite Volleyball Coach Persona ({current_model})...[/bold cyan]")
         call_kwargs = {
@@ -324,6 +334,7 @@ def generate_podcast_script(
         output_script_path.parent.mkdir(parents=True, exist_ok=True)
 
     client = get_openrouter_client()
+    memory_context = get_relevant_memory_context(plugin=plugin, max_chars=3000)
 
     # 1. Editorial Curation Pass
     curated = curate_masterclass_storylines(master_content_path, client, force_curate=force_curate, plugin=plugin)
@@ -393,6 +404,14 @@ def generate_podcast_script(
                 "2. BANNED HYPE CLICHÉS (STRICT): Zero 'incredible', 'this is huge', 'the fact that', 'fascinating', 'game-changer', or 'mind-blowing'. Replace with specific volleyball mechanics and analytical debate.\n"
                 "3. 25-30 MINUTE TARGET & 40% TRAINER VOICE: Embed all provided [CLIP: ...] tags seamlessly. Aim for ~550-600 words of rich host dialogue for this chapter, balanced with coach audio.\n"
             )
+
+            if memory_context:
+                prompt += (
+                    "\n--- CROSS-EPISODE CONTINUITY & PAST WISDOM (MEMORY.MD) ---\n"
+                    "When relevant to the current discussion, hosts should naturally compare ideas, debate differences, or quote past coaches from show memory:\n"
+                    f"{memory_context}\n"
+                    "STRICT RULE: Past coaches/guests are quoted or cited verbally in dialogue by Host A or Host B. Do NOT generate [CLIP: ...] tags for past coaches—clips are strictly reserved for the current episode's audio hashes.\n"
+                )
 
             resp = client.chat.completions.create(
                 model=target_model,

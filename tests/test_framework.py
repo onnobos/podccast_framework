@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 import tempfile
 import shutil
+import json
 
 from src.framework.models import (
     HostConfig,
@@ -408,6 +409,118 @@ class TestSecurityRemediations(unittest.TestCase):
         # Path traversal attempts
         self.assertFalse(bool(re.match(r"^[a-zA-Z0-9_-]+$", "../../../etc/passwd")))
         self.assertFalse(bool(re.match(r"^[a-zA-Z0-9_-]+$", "slug; rm -rf /")))
+
+
+class TestShowMemoryManager(unittest.TestCase):
+    """Test show institutional memory extraction, formatting, persistence, and injection."""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp())
+        self.memory_file = self.test_dir / "MEMORY.md"
+        self.plugin = MockCustomPlugin()
+        # Override memory_path for mock
+        self._orig_memory_path = MockCustomPlugin.memory_path
+        MockCustomPlugin.memory_path = property(lambda s: self.memory_file)
+
+    def tearDown(self):
+        MockCustomPlugin.memory_path = self._orig_memory_path
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_plugin_memory_empty_and_save(self):
+        self.assertEqual(self.plugin.get_memory(), "")
+        saved_path = self.plugin.save_memory("Sample initial memory content")
+        self.assertEqual(saved_path, self.memory_file)
+        self.assertEqual(self.plugin.get_memory(), "Sample initial memory content")
+
+    def test_format_memory_entry(self):
+        from src.memory_manager import format_memory_entry
+        data = {
+            "title": "Tactical Breakdown",
+            "featured_expert": "Coach John",
+            "core_lessons": ["Lesson 1: Platform angle", "Lesson 2: Mental discipline"],
+            "standout_quotes": ["Discipline creates freedom on court"],
+            "keywords": ["platform", "discipline", "serve-receive"]
+        }
+        entry = format_memory_entry("test-episode", data)
+        self.assertIn("<!-- episode: test-episode -->", entry)
+        self.assertIn("<!-- end_episode: test-episode -->", entry)
+        self.assertIn("### Tactical Breakdown", entry)
+        self.assertIn("Coach John", entry)
+        self.assertIn("Lesson 1: Platform angle", entry)
+        self.assertIn('"Discipline creates freedom on court"', entry)
+        self.assertIn("`platform`", entry)
+
+    def test_update_podcast_memory_append_and_replace(self):
+        from src.memory_manager import update_podcast_memory
+        master_file = self.test_dir / "master_coach-alpha.md"
+        master_file.write_text("# Coach Alpha Masterclass\n\nDeep dive into defensive systems.", encoding="utf-8")
+
+        # Mock client to avoid real API calls during unit test
+        class DummyMsg:
+            content = json.dumps({
+                "title": "Coach Alpha Masterclass",
+                "featured_expert": "Coach Alpha",
+                "core_lessons": ["Read shoulders before contact"],
+                "standout_quotes": ["Defense is anticipation"],
+                "keywords": ["defense", "anticipation"]
+            })
+        class DummyChoice:
+            message = DummyMsg()
+        class DummyResp:
+            choices = [DummyChoice()]
+            usage = None
+        class DummyCompletions:
+            def create(self, **kwargs):
+                return DummyResp()
+        class DummyChat:
+            completions = DummyCompletions()
+        class DummyClient:
+            chat = DummyChat()
+
+        # 1. First run appends
+        update_podcast_memory(master_file, plugin=self.plugin, client=DummyClient())
+        mem_content = self.plugin.get_memory()
+        self.assertIn("Coach Alpha", mem_content)
+        self.assertIn("Read shoulders before contact", mem_content)
+
+        # 2. Second run with updated lesson replaces in place
+        class DummyMsg2:
+            content = json.dumps({
+                "title": "Coach Alpha Masterclass",
+                "featured_expert": "Coach Alpha",
+                "core_lessons": ["Updated lesson: Watch setter hips"],
+                "standout_quotes": ["Defense is anticipation"],
+                "keywords": ["defense", "setter-hips"]
+            })
+        class DummyChoice2:
+            message = DummyMsg2()
+        class DummyResp2:
+            choices = [DummyChoice2()]
+            usage = None
+        class DummyCompletions2:
+            def create(self, **kwargs):
+                return DummyResp2()
+        class DummyChat2:
+            completions = DummyCompletions2()
+        class DummyClient2:
+            chat = DummyChat2()
+
+        update_podcast_memory(master_file, plugin=self.plugin, client=DummyClient2())
+        updated_mem = self.plugin.get_memory()
+        self.assertIn("Updated lesson: Watch setter hips", updated_mem)
+        self.assertNotIn("Read shoulders before contact", updated_mem)
+        # Verify single occurrence of slug tags
+        self.assertEqual(updated_mem.count("<!-- episode: coach-alpha -->"), 1)
+
+    def test_get_relevant_memory_context(self):
+        from src.memory_manager import get_relevant_memory_context
+        self.plugin.save_memory("Memory line A\nMemory line B")
+        ctx = get_relevant_memory_context(plugin=self.plugin)
+        self.assertEqual(ctx, "Memory line A\nMemory line B")
+
+        # Context truncation
+        ctx_truncated = get_relevant_memory_context(plugin=self.plugin, max_chars=10)
+        self.assertEqual(len(ctx_truncated), 10)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ from src.audio_engine import generate_podcast_audio
 from src.rss_publisher import publish_episode, delete_episode_from_r2
 from src.cost_tracker import cost_tracker
 from src.framework import registry, get_active_plugin
+from src.memory_manager import update_podcast_memory
 
 app = typer.Typer(help="Podcast Pipeline CLI (Framework & Plugins)", no_args_is_help=False)
 console = Console()
@@ -161,6 +162,13 @@ def run_pipeline_for_slug(
     console.print("[bold cyan]Step 3.5/6: Running Fact-Check Audit & Verification Loop (97%+ Target)...[/bold cyan]")
     verify_and_refine_script(master_content_path, script_path, min_score=97.0, plugin=plugin)
 
+    # Step 3.6: Update Show Institutional Memory (MEMORY.md)
+    console.print(f"[bold cyan]Step 3.6/6: Updating Show Knowledge Memory (MEMORY.md) for {plugin.name}...[/bold cyan]")
+    try:
+        update_podcast_memory(master_content_path, script_path=script_path, plugin=plugin)
+    except Exception as mem_err:
+        console.print(f"[yellow]Note: Memory update skipped ({mem_err})[/yellow]")
+
     # Step 4: Interactive Human-in-the-Loop Pause (AGENTS.md Requirement, Skipped if skip_review=True)
     script_txt = script_path.read_text(encoding="utf-8")
     clip_sec, host_words, host_sec, total_sec, ratio_pct = compute_trainer_audio_ratio(script_txt)
@@ -246,6 +254,35 @@ def list_plugins_cmd():
         hosts_str = ", ".join(f"{h.name} ({h.voice})" for h in p.hosts.values())
         table.add_row(slug, p.name, hosts_str, f"{p.script_config.target_duration_min}m")
     console.print(table)
+
+
+@app.command(name="memory")
+def memory_cmd(
+    action: str = typer.Argument("show", help="Action: 'show' (display memory) or 'update' (extract/update memory)"),
+    slug: Optional[str] = typer.Option(None, "--slug", "-s", help="Episode slug to update (required if action='update')"),
+    plugin: str = typer.Option("volleyball", "--plugin", help="Podcast show plugin to use")
+):
+    """Manage show institutional memory (MEMORY.md) across episodes."""
+    plugin_obj = registry.get_plugin(plugin) or registry.active_plugin
+    if action.lower() == "show":
+        mem = plugin_obj.get_memory()
+        if not mem:
+            console.print(f"[yellow]No memory found in {plugin_obj.memory_path}[/yellow]")
+        else:
+            console.print(Panel(mem, title=f"Show Memory — {plugin_obj.name}", expand=False))
+    elif action.lower() == "update":
+        if not slug:
+            console.print("[bold red]Please specify --slug <episode_slug> to update memory.[/bold red]")
+            sys.exit(1)
+        master_file = Path(f"output/master_{slug}.md")
+        if not master_file.exists():
+            console.print(f"[bold red]Master content not found for slug '{slug}' at {master_file}.[/bold red]")
+            sys.exit(1)
+        script_file = Path(f"output/scripts/{slug}_script.md")
+        update_podcast_memory(master_file, script_path=script_file if script_file.exists() else None, plugin=plugin_obj)
+        console.print(f"[bold green]Successfully updated memory for '{slug}' in {plugin_obj.memory_path}[/bold green]")
+    else:
+        console.print(f"[bold red]Unknown action '{action}'. Use 'show' or 'update'.[/bold red]")
 
 
 @app.command()

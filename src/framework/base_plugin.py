@@ -93,6 +93,23 @@ class PodcastPlugin(ABC):
                 return content
         return default
 
+    @property
+    def memory_path(self) -> Path:
+        """Path to this show plugin's accumulated knowledge memory markdown file."""
+        return self.plugin_dir / "MEMORY.md"
+
+    def get_memory(self) -> str:
+        """Load the show's cumulative MEMORY.md content if it exists."""
+        if self.memory_path.exists():
+            return self.memory_path.read_text(encoding="utf-8").strip()
+        return ""
+
+    def save_memory(self, content: str) -> Path:
+        """Write content to this show plugin's MEMORY.md."""
+        self.memory_path.parent.mkdir(parents=True, exist_ok=True)
+        self.memory_path.write_text(content.strip() + "\n", encoding="utf-8")
+        return self.memory_path
+
     def validate_script(self, script_text: str) -> List[str]:
         """
         Run plugin-specific script validation rules.
